@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba Final ALS</title>
+
+<!-- Llamar a la SDK -->
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/dark/main.css">
+    <script src="https://js.arcgis.com/4.31/"></script>
+
+<!-- Código CSS-->
+<style>
+    
+    body{
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+    }
+
+    #viewDiv{
+        width: 100%;
+        height: 100%;
+    }
+
+</style>
+
+<!-- Código JS -->
+<script defer>
+    require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer",
+        "esri/PopupTemplate",
+        "esri/rest/support/Query",
+        "esri/layers/GraphicsLayer",
+        "esri/widgets/LayerList",
+        "esri/widgets/Sketch",
+        "esri/widgets/Sketch/SketchViewModel"
+        ],
+        
+        (Map, MapView, FeatureLayer, PopupTemplate, Query, GraphicsLayer, LayerList, Sketch, SketchViewModel) => {
+        
+        const mapa= new Map({
+            basemap: "dark-gray",
+        })
+
+        const vista = new MapView({
+            container: "viewDiv",
+            map: mapa,
+            center: [-3.7, 40.4],
+            zoom: 6
+        
+        })
+
+        const comisariasEsp = new FeatureLayer({
+            portalItem: ({
+                id: "8b5bb92c58fa4195a3d4d923e932f0ca"
+            }),
+            renderer: {
+                type: "simple",
+                symbol: {
+                    type: "picture-marker",
+                    height: 15,
+                    url: "https://media0.giphy.com/media/r6FCAJvaBNYz6NtaJv/giphy.gif?cid=6c09b95253ap0y6r6w62io9vzbmgrleuc1ee7fvewosdkypc&ep=v1_stickers_search&rid=giphy.gif&ct=s",
+                    width: 15,
+                    }
+            },
+            effect: "bloom(0.5, 0.4px, 0.0) drop-shadow(3px, 3px, 3px, black)",
+        })
+
+        const tramos = new FeatureLayer({
+            title: "Mapa de tráfico de la DGC 2020 - Tramos",
+            url: "https://services1.arcgis.com/nCKYwcSONQTkPA4K/ArcGIS/rest/services/Mapa_de_tr%c3%a1fico_de_la_DGC_2020/FeatureServer/1",
+            popupTemplate: {
+                title: "{carretera}, PK: {pk_inicio}", 
+                outFields: ["vhkmtotal", "vhkmligero", "vhkmpesado"],
+                content: [{
+                    type: "fields",
+                    fieldInfos: [{
+                        fieldName: "vhkmtotal",
+                        label: "Vehículos por hora totales:",
+                    }, {
+                        fieldName: "vhkmligero",
+                        label: "Vehículos ligeros:",
+                    },
+                    {
+                        fieldName: "vhkmpesado",
+                        label: "Vehículos pesados:",}]
+                }],
+            },
+            effect: "bloom(2, 0.5px,0.0)",
+            renderer: {
+                type: "class-breaks", 
+                field: "IMD_total",
+                classBreakInfos: [
+                    {minValue: 0,
+                    maxValue: 10000,
+                    symbol: {
+                        type: "simple-line",
+                        color: "purple",
+                        }
+                    },
+                    {minValue: 10001,
+                    maxValue: 50000,
+                    symbol: {
+                        type: "simple-line",
+                        color: "cyan",
+                        }
+                    },
+                    {minValue: 50001,
+                    maxValue: 10000000,
+                    symbol: {
+                        type: "simple-line",
+                        color: "green",
+                        }
+                    }
+                ]
+            }
+        })
+
+        const poiTransportes = new FeatureLayer({
+            url: "https://services1.arcgis.com/nCKYwcSONQTkPA4K/ArcGIS/rest/services/BTN_POI_Transportes/FeatureServer/1",
+        })
+
+        const gasolinerasGL = new GraphicsLayer({
+            title: "Gasolineras",
+        })
+
+        const queryPois = new Query({
+            where: "CLASE = 'Área de servicio'", 
+            returnGeometry: true,
+            outFields: ['NOMBRE', 'MUNICIPIO', 'PROVINCIA'],
+        })
+
+        poiTransportes.queryFeatures(queryPois).then((resultadoQuery) => {
+            const entidadesGasolineras = resultadoQuery.features
+            
+            entidadesGasolineras.map((grafico) => {
+                grafico.symbol = {
+                    type: "picture-marker",
+                    height: 7,
+                    url: "https://img.icons8.com/?size=64&id=0Zv1isr8uDgO&format=png",
+                    width:7,
+                };
+                gasolinerasGL.add(grafico)
+            })
+        })
+
+        mapa.add(tramos)
+        mapa.add(gasolinerasGL)
+        mapa.add(comisariasEsp)
+
+        const layerList = new LayerList({
+            view: vista
+        });
+        vista.ui.add(layerList, {
+            position: "bottom-left"
+        });
+
+        const capaGrafica = new GraphicsLayer({
+            elevationInfo: {
+            mode: "absolute-height",
+            },
+            title: "Capa dibujada por usuario",
+            effect: "bloom(2, 0.5px,0.0)"
+        });
+        mapa.add(capaGrafica)
+
+        const simboloSketch = {
+            type: "simple-marker", 
+            color: "cyan",
+            size: 7
+            }
+
+        const sketchVm = new SketchViewModel({
+            view: vista,
+            layer: capaGrafica,
+            pointSymbol: simboloSketch,
+        })
+
+        const sketch = new Sketch({
+            layer: capaGrafica,
+            view: vista,
+            viewModel: sketchVm,
+        });
+
+        vista.ui.add(sketch, "top-right");
+
+        const comisariasDistancia = new GraphicsLayer({
+            title: "Comisarías a 10 km de distancia del punto",
+            })
+
+        sketch.on("create", (event) => {
+
+            const querySketch = new Query({ 
+                geometry: event.graphic.geometry,  
+                returnGeometry: true,
+                spatialRelationship: "intersects",
+                distance: 10,
+                units: "kilometers",
+                outFields: ["*"]
+            })
+
+            comisariasEsp.queryFeatures(querySketch).then((resultadoQuerySketch) => {
+                const comisariasSelecc = resultadoQuerySketch.features
+                
+                console.log(comisariasSelecc)
+
+                comisariasSelecc.map((graficoSketch) => {
+                    graficoSketch.symbol = {
+                        type: "picture-marker",
+                        height: 15,
+                        width: 15,
+                        url: "https://img.icons8.com/?size=96&id=12051&format=png"
+                    };
+
+                    comisariasDistancia.add(graficoSketch);
+                })
+            })
+        mapa.add(comisariasDistancia)
+        console.log(event)
+        })
+    })
+
+</script>
+</head>
+
+<!-- cuerpo HTML -->
+
+<body>
+    <div id="viewDiv"></div>
+</body>
+</html>
